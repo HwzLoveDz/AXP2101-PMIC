@@ -1,10 +1,11 @@
 # AXP2101-PMIC
 AXP2101 Power management IC（AXP2101电源管理芯片）
-## Hardware Open Source Link：https://oshwhub.com/mondraker/axp2101_2023-11-18_20-15-19
-## 库来自 `https://github.com/lewisxhe/XPowersLib` 我只是把IDF工程独立出来并且整理编译了一遍，这里只是留个记录方便大家直接测试。
 
+### 硬件开源链接：https://oshwhub.com/mondraker/axp2101_2023-11-18_20-15-19
+### 库来自: https://github.com/lewisxhe/XPowersLib
+### 我只是把IDF工程独立出来并且整理编译了一遍，这里只是留个记录方便大家直接测试。
+***
 # XPowersLib Example
-
 ### Prerequisites
 
 Please put XPowersLib and esp-idf in the same level directory, after configuring the esp-idf environment variable, enter `XPowersLib/examples/ESP_IDF_Example` and run the idf.py command directly
