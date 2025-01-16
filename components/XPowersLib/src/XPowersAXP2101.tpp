@@ -2414,7 +2414,7 @@ public:
     */
     bool setChargerConstantCurr(uint8_t opt)
     {
-        if (opt > XPOWERS_AXP2101_CHG_CUR_1000MA)return false;
+        if (opt > XPOWERS_AXP2101_CHG_CUR_1500MA)return false;
         int val = readRegister(XPOWERS_AXP2101_ICC_CHG_SET);
         if (val == -1)return false;
         val &= 0xE0;
