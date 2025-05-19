@@ -1,3 +1,5 @@
+Note: 这个仓库只是作为 XPowersLib 移植到 ESP-IDF 的一种示例方式，其中增加了一些必要的 API,详情见大佬原仓库 XPowersLib
+
 # XPowersLib Example
 
 ### Prerequisites
