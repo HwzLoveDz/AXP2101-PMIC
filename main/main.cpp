@@ -1,86 +1,48 @@
-#include <stdio.h>
-#include <cstring>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "driver/gpio.h"
 #include "esp_log.h"
 #include "sdkconfig.h"
-#include "freertos/queue.h"
 
-#define PMU_INPUT_PIN                   (gpio_num_t)CONFIG_PMU_INTERRUPT_PIN    /*!< axp power chip interrupt Pin*/
-#define PMU_INPUT_PIN_SEL               (1ULL<<PMU_INPUT_PIN)
+#include "tg28_i2c.h"
+#include "tg28_pmic.h"
 
+namespace {
 
-/*
-! WARN:
-Please do not run the example without knowing the external load voltage of the PMU,
-it may burn your external load, please check the voltage setting before running the example,
-if there is any loss, please bear it by yourself
-*/
-// #ifndef XPOWERS_NO_ERROR
-// #error "Running this example is known to not damage the device! Please go and uncomment this!"
-// #endif
+constexpr char kTag[] = "TG28-ESP";
 
-static const char *TAG = "mian";
-
-extern esp_err_t pmu_init();
-extern esp_err_t i2c_init(void);
-extern void pmu_isr_handler();
-
-static void pmu_hander_task(void *);
-static QueueHandle_t  gpio_evt_queue = NULL;
-
-static void IRAM_ATTR pmu_irq_handler(void *arg)
+void log_startup_warning()
 {
-    uint32_t gpio_num = (uint32_t) arg;
-    xQueueSendFromISR(gpio_evt_queue, &gpio_num, NULL);
+    ESP_LOGW(kTag, "首次联调请断开电池和所有下游负载，并使用限流电源接入 VBUS");
+    ESP_LOGW(kTag, "确认寄存器回读和各路实测电压一致后，再逐路连接负载");
 }
 
-static void irq_init()
-{
-    gpio_config_t io_conf;
-    io_conf.intr_type = GPIO_INTR_NEGEDGE;
-    io_conf.mode = GPIO_MODE_INPUT;
-    io_conf.pin_bit_mask = PMU_INPUT_PIN_SEL;
-    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
-    gpio_config(&io_conf);
-    gpio_set_intr_type(PMU_INPUT_PIN, GPIO_INTR_NEGEDGE);
-    //install gpio isr service
-    gpio_install_isr_service(0);
-    //hook isr handler for specific gpio pin
-    gpio_isr_handler_add(PMU_INPUT_PIN, pmu_irq_handler, (void *) PMU_INPUT_PIN);
-
-}
+}  // namespace
 
 extern "C" void app_main(void)
 {
-    //create a queue to handle gpio event from isr
-    gpio_evt_queue = xQueueCreate(5, sizeof(uint32_t));
+    log_startup_warning();
+    ESP_ERROR_CHECK(tg28_i2c_init());
 
-    // Register PMU interrupt pins
-    irq_init();
+    tg28_snapshot_t snapshot = {};
+    ESP_ERROR_CHECK(tg28_read_snapshot(&snapshot));
+    tg28_log_snapshot(snapshot);
 
-    ESP_ERROR_CHECK(i2c_init());
-
-    ESP_LOGI(TAG, "I2C initialized successfully");
-
-    ESP_ERROR_CHECK(pmu_init());
-
-    xTaskCreate(pmu_hander_task, "App/pwr", 4 * 1024, NULL, 10, NULL);
-
-}
-
-
-static void pmu_hander_task(void *args)
-{
-    uint32_t io_num;
-    while (1) {
-        if (xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY)) {
-            pmu_isr_handler();
-        }
+    if (tg28_matches_esp_defaults(snapshot)) {
+        ESP_LOGI(kTag, "寄存器配置与 TG28-ESP 默认值一致");
+    } else {
+        ESP_LOGW(kTag, "回读值与 TG28-ESP 默认值不一致；保持负载断开并先核对实测电压");
     }
+
+#if CONFIG_TG28_APPLY_ESP_CONFIGURATION
+#if !CONFIG_TG28_CONFIRM_LOADS_DISCONNECTED
+#error "TG28 writes require CONFIG_TG28_CONFIRM_LOADS_DISCONNECTED"
+#endif
+    ESP_LOGW(kTag, "写配置已启用：仅允许在电池和下游负载全部断开时执行");
+    ESP_ERROR_CHECK(tg28_apply_esp_configuration(
+        CONFIG_TG28_CHARGE_CURRENT_MA,
+        CONFIG_TG28_CHARGE_VOLTAGE_MV));
+
+    ESP_ERROR_CHECK(tg28_read_snapshot(&snapshot));
+    tg28_log_snapshot(snapshot);
+#else
+    ESP_LOGI(kTag, "当前为只读模式，程序没有写入任何 TG28 寄存器");
+#endif
 }
-
-
-

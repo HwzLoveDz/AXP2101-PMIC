@@ -1,75 +1,84 @@
-Note: 这个仓库只是作为 XPowersLib 移植到 ESP-IDF 的一种示例方式，其中增加了一些必要的 API,详情见大佬原仓库 XPowersLib
+# TG28-ESP PMIC · ESP-IDF 联调代码
 
-# XPowersLib Example
+这是 TG28-ESP / TG28-ESP-MOD 的 ESP-IDF 示例。默认程序只读取芯片 ID、电源轨开关、电压配置和充电设置，不会在启动时修改寄存器。
 
-### Prerequisites
+## TG28-ESP 默认配置
 
-Please put XPowersLib and esp-idf in the same level directory, after configuring the esp-idf environment variable, enter `XPowersLib/examples/ESP_IDF_Example` and run the idf.py command directly
+| 项目 | 默认值 |
+| --- | --- |
+| DCDC1 | 3.3 V，上电开启 |
+| DCDC4 | 1.8 V，上电开启 |
+| RTC-LDO1 | 3.0 V，常开 |
+| 其余可配置电源轨 | 上电关闭 |
+| 充电目标电压 | 4.2 V |
+| 恒流充电电流 | 300 mA |
+| 充电架构 | 单节锂电池、NVDC 开关充电 |
 
+上述数值是 TG28-ESP 的固定出厂配置。TG28 还有其他定制配置，仅凭芯片顶层丝印无法判断默认电压与上电时序。
 
-### Configure the Project
+## 首次联调
 
-Open the project configuration menu (`idf.py menuconfig`).
+1. 断开电池和所有下游负载，检查焊接、短路、电池极性和 I²C 上拉。
+2. 使用限流电源接入 VBUS，先用万用表确认 DCDC1、DCDC4 与 RTC-LDO1 的实测电压。
+3. 烧录默认固件，只读回查芯片 ID、电源轨状态和充电设置。
+4. 回读值与实测电压一致后，再逐路连接下游负载。
+5. 电池最后接入；接入前核对电芯满充电压、允许充电电流、NTC 与保护板规格。
 
-In the `XPowers Configuration` menu:
+> 不要带着未知负载执行写配置。电压或上电状态不匹配时，可能损坏下游器件或 PMIC。
 
-* Select the PMU Type in the `PMU_Type` option.
-* In `PMU SCL GPIO Num` select the clock pin to connect to the PMU,the default is 22
-* In `PMU SDAGPIO Num` select the data pin connected to the PMU,the default is 21
-* Select the interrupt pin connected to the PMU in `PMU Interrupt Pin`, the default is 35
+## 编译
 
-## How to Use Example
+需要 ESP-IDF 5.4 或兼容版本：
 
-Before project configuration and build, be sure to set the correct chip target using `idf.py set-target <chip_name>`.
-
-
-### Build and Flash
-
-Run `idf.py -p PORT flash monitor` to build, flash and monitor the project.
-
-(To exit the serial monitor, type ``Ctrl-]``.)
-
-See the [Getting Started Guide](https://docs.espressif.com/projects/esp-idf/en/latest/get-started/index.html) for full steps to configure and use ESP-IDF to build projects.
-
-## Example Output
-
-The output information is to configure the output voltage and enable status of the PMU
-
-```
-I (345) mian: I2C initialized successfully
-I (355) AXP2101: Init PMU SUCCESS!
-I (385) AXP2101: DCDC=======================================================================
-I (385) AXP2101: DC1  :ENABLE    Voltage:3300 mV
-I (385) AXP2101: DC2  :DISABLE   Voltage:900 mV
-I (395) AXP2101: DC3  :ENABLE    Voltage:3300 mV
-I (395) AXP2101: DC4  :DISABLE   Voltage:1100 mV
-I (405) AXP2101: DC5  :DISABLE   Voltage:1200 mV
-I (405) AXP2101: ALDO=======================================================================
-I (415) AXP2101: ALDO1:ENABLE    Voltage:1800 mV
-I (425) AXP2101: ALDO2:ENABLE    Voltage:2800 mV
-I (425) AXP2101: ALDO3:ENABLE    Voltage:3300 mV
-I (435) AXP2101: ALDO4:ENABLE    Voltage:3000 mV
-I (435) AXP2101: BLDO=======================================================================
-I (445) AXP2101: BLDO1:ENABLE    Voltage:3300 mV
-```
-
-## Build process example
-
-Assuming you don't have esp-idf yet
-
-```
-mkdir -p ~/esp
-cd ~/esp
-git clone --recursive https://github.com/espressif/esp-idf.git
-git clone https://github.com/lewisxhe/XPowersLib.git
-cd esp-idf
-./install.sh
-. ./export.sh
-cd ..
-cd XPowersLib/examples/ESP_IDF_Example
+```bash
+idf.py set-target esp32
 idf.py menuconfig
 idf.py build
-idf.py -b 921600 flash
-idf.py monitor
-
+idf.py -p PORT flash monitor
 ```
+
+ESP32 默认 SDA/SCL 为 GPIO21/GPIO22；ESP32-C3 默认是 GPIO8/GPIO9。实际接线不同，可在 `TG28-ESP PMIC` 菜单中修改。
+
+默认串口输出会列出：
+
+- 芯片 ID；
+- DCDC1～DCDC4 的开关状态、配置电压与原始寄存器值；
+- LDO 开关寄存器；
+- 充电电流和目标电压；
+- 当前配置是否与 TG28-ESP 默认值一致。
+
+RTC-LDO1 不由 REG90/REG91 控制，3.0 V 需用万用表确认。
+
+## 写配置
+
+日常联调保持默认只读模式。确需恢复或修改配置时，先断开电池和全部下游负载，再进入 `idf.py menuconfig`：
+
+1. 勾选 `I have disconnected the battery and every downstream load`；
+2. 勾选 `Write TG28-ESP rail and charger settings at startup`；
+3. 选择充电电流和满充电压，重新编译运行；
+4. 程序写入后会立即回读校验；完成实验后关闭两个写配置选项，再重新编译为只读固件。
+
+写配置模式会设置 DCDC1 3.3 V、DCDC4 1.8 V，关闭其余可配置电源轨，并写入所选充电设置。充电电流默认保持 300 mA；若所用电芯和系统散热允许，可在上电后改为其他受支持档位，例如 800 mA。
+
+这里修改的是当前运行寄存器，不会改写芯片的 eFuse 出厂配置。断电重启后，芯片仍按原有 eFuse 配置上电；量产固件应按自己的电源时序，在主控启动后应用经过验证的运行设置。
+
+## 目录
+
+```text
+main/
+├─ main.cpp         启动流程与安全提示
+├─ tg28_i2c.*       ESP-IDF I²C 接口
+└─ tg28_pmic.*      寄存器回读、解码、校验与受控写入
+```
+
+项目不再内置第三方 PMIC 库，默认路径也不会在初始化阶段写入 TS、电量计、IRQ 或其他电源配置。
+
+## 验证范围
+
+- 已对照 TG28 当前数据手册核对本文使用的寄存器地址与编码。
+- GitHub Actions 会编译 ESP32 和 ESP32-C3 目标；本次整理也已使用 ESP-IDF 5.4.1 在本地完成两套目标编译。
+- 本次仓库整理未重复进行实机测试；实际电压、纹波、温升与带载能力以具体板卡测量为准。
+
+## License
+
+GPL-3.0。第三方资料和工具保留各自版权与许可。

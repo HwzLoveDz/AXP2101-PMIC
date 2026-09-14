@@ -1,5 +1,8 @@
-idf_component_register(SRCS "main.cpp"
-                    "port_axp192.cpp"
-                    "port_axp2101.cpp"
-                    "port_i2c.cpp"
-                    INCLUDE_DIRS ".")
+idf_component_register(
+    SRCS
+        "main.cpp"
+        "tg28_pmic.cpp"
+        "tg28_i2c.cpp"
+    INCLUDE_DIRS "."
+    REQUIRES esp_driver_i2c
+)
