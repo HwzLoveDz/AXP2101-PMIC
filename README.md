@@ -1,6 +1,10 @@
 # TG28-ESP PMIC · ESP-IDF 驱动与联调示例
 
+**中文** | [English](README.en.md)
+
 这是面向 TG28 / TG28-ESP-MOD 的 ESP-IDF 驱动。电源轨、充电、电量计、ADC、IRQ 与看门狗等常用功能均保留为独立 API；默认示例只读取状态，不会在启动时修改任何 TG28 寄存器。
+
+模块设计、测试底板、四层参考布局、资料包及购买 / 定制入口见：[立创开源硬件项目页](https://oshwhub.com/mondraker/axp2101_2023-11-18_20-15-19)。
 
 ## TG28-ESP 默认配置
 
