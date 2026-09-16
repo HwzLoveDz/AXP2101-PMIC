@@ -1,5 +1,7 @@
 #include "tg28_i2c.h"
 
+#include <array>
+
 #include "driver/i2c_master.h"
 #include "esp_log.h"
 #include "sdkconfig.h"
@@ -53,17 +55,52 @@ esp_err_t tg28_i2c_init()
 
 esp_err_t tg28_i2c_read_register(uint8_t reg, uint8_t *value)
 {
-    if (s_device == nullptr || value == nullptr) {
-        return ESP_ERR_INVALID_STATE;
-    }
-    return i2c_master_transmit_receive(s_device, &reg, 1, value, 1, kTimeoutMs);
+    return tg28_i2c_read(reg, value, 1);
 }
 
 esp_err_t tg28_i2c_write_register(uint8_t reg, uint8_t value)
 {
+    return tg28_i2c_write(reg, &value, 1);
+}
+
+esp_err_t tg28_i2c_read(uint8_t reg, uint8_t *data, size_t length)
+{
     if (s_device == nullptr) {
         return ESP_ERR_INVALID_STATE;
     }
-    const uint8_t payload[] = {reg, value};
-    return i2c_master_transmit(s_device, payload, sizeof(payload), kTimeoutMs);
+    if (data == nullptr || length == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    return i2c_master_transmit_receive(s_device, &reg, 1, data, length, kTimeoutMs);
+}
+
+esp_err_t tg28_i2c_write(uint8_t reg, const uint8_t *data, size_t length)
+{
+    if (s_device == nullptr) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (data == nullptr || length == 0 || length > 32) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    std::array<uint8_t, 33> payload = {};
+    payload[0] = reg;
+    for (size_t i = 0; i < length; ++i) {
+        payload[i + 1] = data[i];
+    }
+    return i2c_master_transmit(s_device, payload.data(), length + 1, kTimeoutMs);
+}
+
+esp_err_t tg28_i2c_update_bits(uint8_t reg, uint8_t mask, uint8_t value)
+{
+    uint8_t current = 0;
+    esp_err_t err = tg28_i2c_read_register(reg, &current);
+    if (err != ESP_OK) {
+        return err;
+    }
+    const uint8_t next = static_cast<uint8_t>((current & ~mask) | (value & mask));
+    if (next == current) {
+        return ESP_OK;
+    }
+    return tg28_i2c_write_register(reg, next);
 }
